@@ -48,6 +48,28 @@ func TestSave(t *testing.T) {
 	assert.Assert(t, strings.Contains(etcOSRelease, "Alpine"))
 }
 
+func TestSaveById(t *testing.T) {
+	base := testutil.NewBase(t)
+	base.Cmd("pull", testutil.AlpineImage).AssertOK()
+	res := base.Cmd("inspect", testutil.AlpineImage, "--format", "{{.RepoDigests}}").Run()
+	repoDigests := strings.Split(res.Stdout(), ":")[1]
+	id := repoDigests[0 : len(repoDigests)-2]
+	archiveTarPath := filepath.Join(t.TempDir(), "id.tar")
+	base.Cmd("save", "-o", archiveTarPath, id).AssertOK()
+	rootfsPath := filepath.Join(t.TempDir(), "rootfs")
+	base.Cmd("inspect", testutil.AlpineImage)
+	err := extractDockerArchive(archiveTarPath, rootfsPath)
+	assert.NilError(t, err)
+	etcOSReleasePath := filepath.Join(rootfsPath, "/etc/os-release")
+	fmt.Println(etcOSReleasePath)
+	etcOSReleaseBytes, err := os.ReadFile(etcOSReleasePath)
+	assert.NilError(t, err)
+	etcOSRelease := string(etcOSReleaseBytes)
+	t.Logf("read %q, extracted from %q", etcOSReleasePath, testutil.AlpineImage)
+	t.Log(etcOSRelease)
+	assert.Assert(t, strings.Contains(etcOSRelease, "Alpine"))
+}
+
 func extractDockerArchive(archiveTarPath, rootfsPath string) error {
 	if err := os.MkdirAll(rootfsPath, 0755); err != nil {
 		return err

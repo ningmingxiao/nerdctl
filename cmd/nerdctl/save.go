@@ -17,15 +17,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/containerd/containerd/images/archive"
+	"github.com/containerd/nerdctl/pkg/idutil/imagewalker"
 	"github.com/containerd/nerdctl/pkg/platformutil"
-	"github.com/containerd/nerdctl/pkg/referenceutil"
 	"github.com/mattn/go-isatty"
-
 	"github.com/spf13/cobra"
 )
 
@@ -105,12 +105,36 @@ func saveImage(images []string, out io.Writer, saveOpts []archive.ExportOpt, cmd
 	saveOpts = append(saveOpts, archive.WithPlatform(platMC))
 
 	imageStore := client.ImageService()
+	var foundImageNames []string
+	var foundId []string
+	walker := &imagewalker.ImageWalker{
+		Client: client,
+		OnFound: func(ctx context.Context, found imagewalker.Found) error {
+			imgName := found.Image.Name
+			imgDigest := found.Image.Target.Digest.String()
+			if imgName != "" && imgDigest != "" {
+				foundImageNames = append(foundImageNames, imgName)
+				foundId = append(foundId, imgDigest)
+			} else {
+				return fmt.Errorf("imgName or imgDigest is null")
+			}
+			return nil
+		},
+	}
+	var empty []string
 	for _, img := range images {
-		named, err := referenceutil.ParseAny(img)
+		foundImageNames = empty
+		foundId = empty
+		count, err := walker.Walk(ctx, img)
 		if err != nil {
 			return err
 		}
-		saveOpts = append(saveOpts, archive.WithImage(imageStore, named.String()))
+		if count > 1 {
+			return fmt.Errorf("ambiguous digest id")
+		}
+		for _, localName := range foundImageNames {
+			saveOpts = append(saveOpts, archive.WithImage(imageStore, localName))
+		}
 	}
 
 	return client.Export(ctx, out, saveOpts...)
