@@ -112,7 +112,12 @@ func generateCgroupOpts(cmd *cobra.Command, id string) ([]oci.SpecOpts, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, oci.WithCPUCFS(cpuQuota, cpuPeriod))
+	if cpuQuota != -1 || cpuPeriod != 0 {
+		if cpus > 0.0 {
+			return nil, errors.New("cpus and quota/period should be used separately")
+		}
+		opts = append(opts, oci.WithCPUCFS(cpuQuota, cpuPeriod))
+	}
 	cpusetMems, err := cmd.Flags().GetString("cpuset-mems")
 	if err != nil {
 		return nil, err
