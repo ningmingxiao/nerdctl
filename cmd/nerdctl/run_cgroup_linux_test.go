@@ -221,6 +221,24 @@ func TestRunCgroupConf(t *testing.T) {
 		"cat", "memory.high").AssertOutExactly("33554432\n")
 }
 
+func TestRunCgroupConfCgroupV1(t *testing.T) {
+	t.Parallel()
+	if cgroups.Mode() != cgroups.Legacy {
+		t.Skip("test requires cgroup v1")
+	}
+	base := testutil.NewBase(t)
+	info := base.Info()
+	switch info.CgroupDriver {
+	case "none", "":
+		t.Skip("test requires cgroup driver")
+	}
+	if !info.MemoryLimit {
+		t.Skip("test requires MemoryLimit")
+	}
+	base.Cmd("run", "--rm", "--cgroup-conf", "memory.high=33554432", "-w", "/sys/fs/cgroup", testutil.AlpineImage,
+		"cat", "memory.high").AssertOutContains("cannot use --cgroup-conf without cgroup v2")
+}
+
 func TestRunBlkioWeightCgroupV2(t *testing.T) {
 	t.Parallel()
 	if cgroups.Mode() != cgroups.Unified {
@@ -238,4 +256,24 @@ func TestRunBlkioWeightCgroupV2(t *testing.T) {
 	// when bfq io scheduler is used, the io.weight knob is exposed as io.bfq.weight
 	base.Cmd("run", "--rm", "--blkio-weight", "300", "-w", "/sys/fs/cgroup", testutil.AlpineImage,
 		"cat", "io.bfq.weight").AssertOutExactly("default 300\n")
+}
+
+func TestRunBlkioWeightCgroupV1(t *testing.T) {
+	t.Parallel()
+	if cgroups.Mode() !=cgroups.Legacy {
+		t.Skip("test requires cgroup v1")
+	}
+	if _, err := os.Stat("/sys/module/bfq"); err != nil {
+		t.Skipf("test requires \"bfq\" module to be loaded: %v", err)
+	}
+	base := testutil.NewBase(t)
+	info := base.Info()
+	switch info.CgroupDriver {
+	case "none", "":
+		t.Skip("test requires cgroup driver")
+	}
+	file:="/sys/fs/cgroup/blkio/blkio.weight"
+	// when bfq io scheduler is used, the io.weight knob is exposed as io.bfq.weight
+	base.Cmd("run", "--rm", "--blkio-weight", "300", testutil.AlpineImage,
+		"cat", file).AssertOutExactly("300\n")
 }
