@@ -1,3 +1,4 @@
+
 /*
    Copyright The containerd Authors.
 
@@ -17,229 +18,267 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"errors"
-	"fmt"
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/pkg/progress"
-	"github.com/containerd/nerdctl/pkg/formatter"
-	"github.com/containerd/nerdctl/pkg/idutil/imagewalker"
-	"github.com/containerd/nerdctl/pkg/imgutil"
-	"github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/identity"
-	"github.com/sirupsen/logrus"
-	//"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	"io"
-	"os"
-	"text/tabwriter"
-	"text/template"
-	"time"
+        "bytes"
+        "context"
+        "errors"
+        "fmt"
+        "github.com/containerd/containerd"
+        "github.com/containerd/containerd/pkg/progress"
+        "github.com/containerd/containerd/platforms"
+        "github.com/containerd/nerdctl/pkg/formatter"
+        "github.com/containerd/nerdctl/pkg/idutil/imagewalker"
+        "github.com/containerd/nerdctl/pkg/imgutil"
+        "github.com/opencontainers/go-digest"
+        "github.com/opencontainers/image-spec/identity"
+        "github.com/sirupsen/logrus"
+        //"github.com/sirupsen/logrus"
+        "github.com/spf13/cobra"
+        "io"
+        "os"
+        "text/tabwriter"
+        "text/template"
+        "time"
 )
 
 func newHistoryCommand() *cobra.Command {
-	var historyCommand = &cobra.Command{
-		Use:               "history [OPTIONS] IMAGE",
-		Short:             "Show the history of an image",
-		Args:              cobra.ExactArgs(1),
-		RunE:              historyAction,
-		ValidArgsFunction: historyShellComplete,
-		SilenceUsage:      true,
-		SilenceErrors:     true,
-	}
-	addHistoryFlags(historyCommand)
-	return historyCommand
+        var historyCommand = &cobra.Command{
+                Use:               "history [OPTIONS] IMAGE",
+                Short:             "Show the history of an image",
+                Args:              cobra.ExactArgs(1),
+                RunE:              historyAction,
+                ValidArgsFunction: historyShellComplete,
+                SilenceUsage:      true,
+                SilenceErrors:     true,
+        }
+        addHistoryFlags(historyCommand)
+        return historyCommand
 }
 
 func addHistoryFlags(cmd *cobra.Command) {
-	cmd.Flags().StringP("format", "f", "", "Format the output using the given Go template, e.g, '{{json .}}'")
-	cmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"json"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	cmd.Flags().BoolP("quiet", "q", false, "Only show numeric IDs")
-	cmd.Flags().Bool("no-trunc", false, "Don't truncate output")
+        cmd.Flags().StringP("format", "f", "", "Format the output using the given Go template, e.g, '{{json .}}'")
+        cmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+                return []string{"json"}, cobra.ShellCompDirectiveNoFileComp
+        })
+        cmd.Flags().BoolP("quiet", "q", false, "Only show numeric IDs")
+        cmd.Flags().Bool("no-trunc", false, "Don't truncate output")
 }
 
 type historyPrintable struct {
-	Image        string
-	CreatedSince string
-	CreatedBy    string
-	Size         string
-	Comment      string
+        Image        string
+        CreatedSince string
+        CreatedBy    string
+        Size         string
+        Comment      string
 }
 
 func historyAction(cmd *cobra.Command, args []string) error {
-	client, ctx, cancel, err := newClient(cmd)
-	if err != nil {
-		return err
-	}
-	defer cancel()
+        client, ctx, cancel, err := newClient(cmd)
+        if err != nil {
+                return err
+        }
+        defer cancel()
 
-	walker := &imagewalker.ImageWalker{
-		Client: client,
-		OnFound: func(ctx context.Context, found imagewalker.Found) error {
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			img := containerd.NewImage(client, found.Image)
-			imageConfig, imageConfigDesc, err := imgutil.ReadImageConfig(ctx, img)
-			fmt.Println(imageConfigDesc.Digest)
-			configHistorys := imageConfig.History
-			layerCounter := 0
-			diffIDs, err := img.RootFS(ctx)
-			if err != nil {
-				return err
-			}
-			var dgsts []digest.Digest
-			var historys []historyPrintable
-			dgsts = append(dgsts, diffIDs[0])
+        walker := &imagewalker.ImageWalker{
+                Client: client,
+                OnFound: func(ctx context.Context, found imagewalker.Found) error {
+                        ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+                        defer cancel()
+                        img := containerd.NewImage(client, found.Image)
 
-			for _, h := range configHistorys {
-				var size string
-				if !h.EmptyLayer {
-					if len(diffIDs) <= layerCounter {
-						return fmt.Errorf("too many non-empty layers in History section")
-					}
-					diffIDs := diffIDs[0 : layerCounter+1]
-					chainID := identity.ChainID(diffIDs).String()
-					snapshotter, err := cmd.Flags().GetString("snapshotter")
-					if err != nil {
-						return err
-					}
-					s := client.SnapshotService(snapshotter)
-					use, err := s.Usage(ctx, chainID)
-					if err != nil {
-						return err
-					}
-					size = progress.Bytes(use.Size).String()
-					layerCounter++
-				} else {
-					size = "0B"
-				}
-				history := historyPrintable{
-					Image:        "",
-					CreatedSince: formatter.TimeSinceInHuman(*h.Created),
-					CreatedBy:    h.CreatedBy,
-					Size:         size,
-					Comment:      h.Comment,
-				}
-				historys = append(historys, history)
-			}
-			printHistory(cmd, historys)
-			return nil
-		},
-	}
+                        lastDiffIDMap, err := getContainersLastDiffId(ctx, client)
+                        if err != nil {
+                                return err
+                        }
+                        imageConfig, _, err := imgutil.ReadImageConfig(ctx, img)
+                        configHistorys := imageConfig.History
+                        layerCounter := 0
+                        diffIDs, err := img.RootFS(ctx)
+                        if err != nil {
+                                return err
+                        }
+                        var dgsts []digest.Digest
+                        var historys []historyPrintable
+                        dgsts = append(dgsts, diffIDs[0])
 
-	var errs []error
-	for _, req := range args {
-		n, err := walker.Walk(ctx, req)
-		if err != nil {
-			errs = append(errs, err)
-		} else if n == 0 {
-			errs = append(errs, fmt.Errorf("no such object: %s", req))
-		} else if n > 1 {
-			return fmt.Errorf("multiple IDs found with provided prefix: %s", req)
-		}
-	}
-	return nil
+                        for _, h := range configHistorys {
+                                var size string
+                                var dig digest.Digest
+                                if !h.EmptyLayer {
+                                        if len(diffIDs) <= layerCounter {
+                                                return fmt.Errorf("too many non-empty layers in History section")
+                                        }
+                                        diffIDs := diffIDs[0 : layerCounter+1]
+                                        chainID := identity.ChainID(diffIDs).String()
+                                        snapshotter, err := cmd.Flags().GetString("snapshotter")
+                                        if err != nil {
+                                                return err
+                                        }
+                                        s := client.SnapshotService(snapshotter)
+                                        //stat, err := s.Stat(ctx, chainID)
+                                        //if err != nil {
+                                        //      return err
+                                        //}
+                                        use, err := s.Usage(ctx, chainID)
+                                        if err != nil {
+                                                return err
+                                        }
+                                        size = progress.Bytes(use.Size).String()
+                                        value, ok := lastDiffIDMap[diffIDs[len(diffIDs)-1]]
+                                        if ok {
+                                                dig = value
+                                        }
+                                        layerCounter++
+                                } else {
+                                        size = progress.Bytes(0).String()
+                                }
+                                var name string
+                                if dig.String() != "" {
+                                        name = dig.String()
+                                } else {
+                                        name = "<missing>"
+                                }
+                                history := historyPrintable{
+                                        Image:        name,
+                                        CreatedSince: formatter.TimeSinceInHuman(*h.Created),
+                                        CreatedBy:    h.CreatedBy,
+                                        Size:         size,
+                                        Comment:      h.Comment,
+                                }
+                                historys = append(historys, history)
+                        }
+                        printHistory(cmd, historys)
+                        return nil
+                },
+        }
+
+        var errs []error
+        for _, req := range args {
+                n, err := walker.Walk(ctx, req)
+                if err != nil {
+                        errs = append(errs, err)
+                } else if n == 0 {
+                        errs = append(errs, fmt.Errorf("no such object: %s", req))
+                } else if n > 1 {
+                        return fmt.Errorf("multiple IDs found with provided prefix: %s", req)
+                }
+        }
+        return nil
 }
 
 type historyPrinter struct {
-	w              io.Writer
-	quiet, noTrunc bool
-	tmpl           *template.Template
+        w              io.Writer
+        quiet, noTrunc bool
+        tmpl           *template.Template
 }
 
 func printHistory(cmd *cobra.Command, historys []historyPrintable) error {
-	quiet, err := cmd.Flags().GetBool("quiet")
-	if err != nil {
-		return err
-	}
-	noTrunc, err := cmd.Flags().GetBool("no-trunc")
-	if err != nil {
-		return err
-	}
-	var w io.Writer
-	w = os.Stdout
+        quiet, err := cmd.Flags().GetBool("quiet")
+        if err != nil {
+                return err
+        }
+        noTrunc, err := cmd.Flags().GetBool("no-trunc")
+        if err != nil {
+                return err
+        }
+        var w io.Writer
+        w = os.Stdout
 
-	format, err := cmd.Flags().GetString("format")
-	fmt.Println("format")
-	fmt.Println(format)
-	if err != nil {
-		return err
-	}
+        format, err := cmd.Flags().GetString("format")
+        if err != nil {
+                return err
+        }
 
-	var tmpl *template.Template
-	switch format {
-	case "", "table":
-		w = tabwriter.NewWriter(w, 20, 18, 8, ' ', 0)
-		if !quiet {
-			fmt.Fprintln(w, "IMAGE\tCREATED\tCREATED BY\tSIZE\tCOMMENT")
-		}
-	case "raw":
-		return errors.New("unsupported format: \"raw\"")
-	default:
-		if quiet {
-			return errors.New("format and quiet must not be specified together")
-		}
-		var err error
-		tmpl, err = parseTemplate(format)
-		if err != nil {
-			return err
-		}
-	}
+        var tmpl *template.Template
+        switch format {
+        case "", "table":
+                w = tabwriter.NewWriter(w, 20, 18, 8, ' ', 0)
+                if !quiet {
+                        fmt.Fprintln(w, "IMAGE\tCREATED\tCREATED BY\tSIZE\tCOMMENT")
+                }
+        case "raw":
+                return errors.New("unsupported format: \"raw\"")
+        default:
+                if quiet {
+                        return errors.New("format and quiet must not be specified together")
+                }
+                var err error
+                tmpl, err = parseTemplate(format)
+                if err != nil {
+                        return err
+                }
+        }
 
-	printer := &historyPrinter{
-		w:       w,
-		quiet:   quiet,
-		noTrunc: noTrunc,
-		tmpl:    tmpl,
-	}
-	for index := len(historys) - 1; index >= 0; index-- {
-		if err := printer.printHistory(historys[index]); err != nil {
-			logrus.Warn(err)
-		}
-	}
+        printer := &historyPrinter{
+                w:       w,
+                quiet:   quiet,
+                noTrunc: noTrunc,
+                tmpl:    tmpl,
+        }
 
-	if f, ok := w.(Flusher); ok {
-		return f.Flush()
-	}
-	return nil
+        for index := len(historys) - 1; index >= 0; index-- {
+                if err := printer.printHistory(historys[index]); err != nil {
+                        logrus.Warn(err)
+                }
+        }
+
+        if f, ok := w.(Flusher); ok {
+                return f.Flush()
+        }
+        return nil
 }
 
 func (x *historyPrinter) printHistory(p historyPrintable) error {
-	if !x.noTrunc {
-		if len(p.CreatedBy) > 45 {
-			p.CreatedBy = p.CreatedBy[0:44] + "..."
-		}
-	}
-	if x.tmpl != nil {
-		var b bytes.Buffer
-		if err := x.tmpl.Execute(&b, p); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(x.w, b.String()+"\n"); err != nil {
-			return err
-		}
-	} else if x.quiet {
-		if _, err := fmt.Fprintf(x.w, "%s\n", p.Image); err != nil {
-			return err
-		}
-	} else {
-		if _, err := fmt.Fprintf(x.w, "%s\t%s\t%s\t%s\t%s\n",
-			p.Image,
-			p.CreatedSince,
-			p.CreatedBy,
-			p.Size,
-			p.Comment,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
+        if !x.noTrunc {
+                if len(p.CreatedBy) > 45 {
+                        p.CreatedBy = p.CreatedBy[0:44] + "..."
+                }
+        }
+        if x.tmpl != nil {
+                var b bytes.Buffer
+                if err := x.tmpl.Execute(&b, p); err != nil {
+                        return err
+                }
+                if _, err := fmt.Fprintf(x.w, b.String()+"\n"); err != nil {
+                        return err
+                }
+        } else if x.quiet {
+                if _, err := fmt.Fprintf(x.w, "%s\n", p.Image); err != nil {
+                        return err
+                }
+        } else {
+                if _, err := fmt.Fprintf(x.w, "%s\t%s\t%s\t%s\t%s\n",
+                        p.Image,
+                        p.CreatedSince,
+                        p.CreatedBy,
+                        p.Size,
+                        p.Comment,
+                ); err != nil {
+                        return err
+                }
+        }
+        return nil
+}
+
+func getContainersLastDiffId(ctx context.Context, client *containerd.Client) (map[digest.Digest]digest.Digest, error) {
+        diffIDMap := make(map[digest.Digest]digest.Digest)
+        imageStore := client.ImageService()
+        cs := client.ContentStore()
+        imageList, err := imageStore.List(ctx)
+        if err != nil {
+                return diffIDMap, err
+        }
+        for _, img := range imageList {
+                digests, err := img.RootFS(ctx, cs, platforms.DefaultStrict())
+                if err != nil {
+                        return diffIDMap, err
+                }
+                lastDigestsID := digests[len(digests)-1]
+                diffIDMap[lastDigestsID] = img.Target.Digest
+        }
+        return diffIDMap, nil
 }
 
 func historyShellComplete(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	// show image names
-	return shellCompleteImageNames(cmd)
+        // show image names
+        return shellCompleteImageNames(cmd)
 }
