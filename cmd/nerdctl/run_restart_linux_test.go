@@ -135,6 +135,7 @@ func TestRunRestartWithUnlessStopped(t *testing.T) {
 }
 
 func TestUpdateRestartPolicy(t *testing.T) {
+	t.skip()
 	base := testutil.NewBase(t)
 	if testutil.GetTarget() == testutil.Nerdctl {
 		testutil.RequireContainerdPlugin(base, "io.containerd.internal.v1", "restart", []string{"on-failure"})
