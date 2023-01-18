@@ -922,15 +922,15 @@ func withBindMountHostProcfs(_ context.Context, _ oci.Client, _ *containers.Cont
 }
 
 func generateLogURI(dataStore string) (*url.URL, error) {
-	selfExe, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
 	args := map[string]string{
 		logging.MagicArgv1: dataStore,
 	}
 
-	return cio.LogURIGenerator("binary", selfExe, args)
+	nlogDriver, err := exec.LookPath("nlog-driver")
+	if err != nil {
+		return nil, err
+	}
+	return cio.LogURIGenerator("binary", nlogDriver, args)
 }
 
 func withNerdctlOCIHook(cmd *cobra.Command, id string) (oci.SpecOpts, error) {
