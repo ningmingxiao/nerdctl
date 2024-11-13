@@ -19,9 +19,11 @@ package container
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	containerd "github.com/containerd/containerd/v2/client"
@@ -40,11 +42,11 @@ import (
 
 // List prints containers according to `options`.
 func List(ctx context.Context, client *containerd.Client, options types.ContainerListOptions) ([]ListItem, error) {
-	containers, err := filterContainers(ctx, client, options.Filters, options.LastN, options.All)
+	containers, all, err := filterContainers(ctx, client, options.Filters, options.LastN, options.All)
 	if err != nil {
 		return nil, err
 	}
-	return prepareContainers(ctx, client, containers, options)
+	return prepareContainers(ctx, client, containers, options, all)
 }
 
 // filterContainers returns containers matching the filters.
@@ -53,17 +55,16 @@ func List(ctx context.Context, client *containerd.Client, options types.Containe
 //   - all means showing all containers (default shows just running).
 //   - lastN means only showing n last created containers (includes all states). Non-positive values are ignored.
 //     In other words, if lastN is positive, all will be set to true.
-func filterContainers(ctx context.Context, client *containerd.Client, filters []string, lastN int, all bool) ([]containerd.Container, error) {
+func filterContainers(ctx context.Context, client *containerd.Client, filters []string, lastN int, all bool) ([]containerd.Container, bool, error) {
 	containers, err := client.Containers(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	filterCtx, err := foldContainerFilters(ctx, containers, filters)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	containers = filterCtx.MatchesFilters(ctx)
-
 	sort.Slice(containers, func(i, j int) bool {
 		infoI, _ := containers[i].Info(ctx, containerd.WithoutRefreshedMetadata)
 		infoJ, _ := containers[j].Info(ctx, containerd.WithoutRefreshedMetadata)
@@ -76,19 +77,10 @@ func filterContainers(ctx context.Context, client *containerd.Client, filters []
 			containers = containers[:lastN]
 		}
 	}
-
 	if all || filterCtx.all {
-		return containers, nil
+		return containers, true, nil
 	}
-
-	var upContainers []containerd.Container
-	for _, c := range containers {
-		cStatus := formatter.ContainerStatus(ctx, c)
-		if strings.HasPrefix(cStatus, "Up") {
-			upContainers = append(upContainers, c)
-		}
-	}
-	return upContainers, nil
+	return containers, false, nil
 }
 
 type ListItem struct {
@@ -112,58 +104,101 @@ func (x *ListItem) Label(s string) string {
 	return x.LabelsMap[s]
 }
 
-func prepareContainers(ctx context.Context, client *containerd.Client, containers []containerd.Container, options types.ContainerListOptions) ([]ListItem, error) {
+func prepareContainers(ctx context.Context, client *containerd.Client, containers []containerd.Container, options types.ContainerListOptions, all bool) ([]ListItem, error) {
 	listItems := make([]ListItem, len(containers))
 	snapshottersCache := map[string]snapshots.Snapshotter{}
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(containers))
 	for i, c := range containers {
-		info, err := c.Info(ctx, containerd.WithoutRefreshedMetadata)
-		if err != nil {
-			if errdefs.IsNotFound(err) {
-				log.G(ctx).Warn(err)
-				continue
-			}
-			return nil, err
-		}
-		spec, err := c.Spec(ctx)
-		if err != nil {
-			if errdefs.IsNotFound(err) {
-				log.G(ctx).Warn(err)
-				continue
-			}
-			return nil, err
-		}
-		id := c.ID()
-		if options.Truncate && len(id) > 12 {
-			id = id[:12]
-		}
-		li := ListItem{
-			Command:   formatter.InspectContainerCommand(spec, options.Truncate, true),
-			CreatedAt: info.CreatedAt,
-			ID:        id,
-			Image:     info.Image,
-			Platform:  info.Labels[labels.Platform],
-			Names:     containerutil.GetContainerName(info.Labels),
-			Ports:     formatter.FormatPorts(info.Labels),
-			Status:    formatter.ContainerStatus(ctx, c),
-			Runtime:   info.Runtime.Name,
-			Labels:    formatter.FormatLabels(info.Labels),
-			LabelsMap: info.Labels,
-		}
-		if options.Size {
-			snapshotter, ok := snapshottersCache[info.Snapshotter]
-			if !ok {
-				snapshottersCache[info.Snapshotter] = containerdutil.SnapshotService(client, info.Snapshotter)
-				snapshotter = snapshottersCache[info.Snapshotter]
-			}
-			containerSize, err := getContainerSize(ctx, snapshotter, info.SnapshotKey)
+		wg.Add(1)
+		go func(ctx context.Context, c containerd.Container, i int) {
+			defer wg.Done()
+			info, err := c.Info(ctx, containerd.WithoutRefreshedMetadata)
 			if err != nil {
-				return nil, err
+				if errdefs.IsNotFound(err) {
+					log.G(ctx).Warn(err)
+					return
+				}
+				errChan <- err
 			}
-			li.Size = containerSize
-		}
-		listItems[i] = li
+			spec, err := c.Spec(ctx)
+			if err != nil {
+				if errdefs.IsNotFound(err) {
+					log.G(ctx).Warn(err)
+					return
+				}
+				errChan <- err
+			}
+			id := c.ID()
+			if options.Truncate && len(id) > 12 {
+				id = id[:12]
+			}
+			cStatus := formatter.ContainerStatus(ctx, c)
+			// only show Up status container
+			if !all {
+				if !strings.HasPrefix(cStatus, "Up") {
+					return
+				}
+			}
+			li := ListItem{
+				Command:   formatter.InspectContainerCommand(spec, options.Truncate, true),
+				CreatedAt: info.CreatedAt,
+				ID:        id,
+				Image:     info.Image,
+				Platform:  info.Labels[labels.Platform],
+				Names:     containerutil.GetContainerName(info.Labels),
+				Ports:     formatter.FormatPorts(info.Labels),
+				Status:    cStatus,
+				Runtime:   info.Runtime.Name,
+				Labels:    formatter.FormatLabels(info.Labels),
+				LabelsMap: info.Labels,
+			}
+			if options.Size {
+				snapshotter, ok := snapshottersCache[info.Snapshotter]
+				if !ok {
+					snapshottersCache[info.Snapshotter] = containerdutil.SnapshotService(client, info.Snapshotter)
+					snapshotter = snapshottersCache[info.Snapshotter]
+				}
+				containerSize, err := getContainerSize(ctx, snapshotter, info.SnapshotKey)
+				if err != nil {
+					errChan <- err
+				}
+				li.Size = containerSize
+			}
+			listItems[i] = li
+		}(ctx, c, i)
 	}
-	return listItems, nil
+	wg.Wait()
+	close(errChan)
+	if len(errChan) > 0 {
+		errs := make([]error, len(errChan))
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			return nil, combineErrors(errs)
+		}
+	}
+	var result []ListItem
+	for _, val := range listItems {
+		if val.ID != "" {
+			result = append(result, val)
+		}
+	}
+	return result, nil
+}
+
+func combineErrors(errs []error) error {
+	var errMsgs []string
+	for _, err := range errs {
+		if err != nil {
+			errMsgs = append(errMsgs, err.Error())
+		}
+	}
+	if len(errMsgs) > 0 {
+		return errors.New(strings.Join(errMsgs, "; "))
+	}
+	return nil
 }
 
 func getContainerNetworks(containerLables map[string]string) []string {
