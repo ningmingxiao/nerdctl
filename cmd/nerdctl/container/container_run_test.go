@@ -40,6 +40,7 @@ import (
 	"github.com/containerd/nerdctl/mod/tigron/tig"
 
 	"github.com/containerd/nerdctl/v2/cmd/nerdctl/helpers"
+	"github.com/containerd/nerdctl/v2/pkg/rootlessutil"
 	"github.com/containerd/nerdctl/v2/pkg/testutil"
 	"github.com/containerd/nerdctl/v2/pkg/testutil/nerdtest"
 )
@@ -1057,4 +1058,45 @@ HEALTHCHECK --interval=30s --timeout=10s CMD wget -q --spider http://localhost:8
 	}
 
 	testCase.Run(t)
+}
+
+func countFIFOFiles(root string) (int, error) {
+	count := 0
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeNamedPipe != 0 {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+func TestCleanupFIFOs(t *testing.T) {
+	if rootlessutil.IsRootless() {
+		t.Skip("/run/containerd/fifo/ doesn't exist on rootless")
+	}
+	testCase := nerdtest.Setup()
+	testCase.Setup = func(data test.Data, helpers test.Helpers) {
+		cmd := helpers.Command("run", "-it", "--rm", "--name", data.Identifier(),
+			testutil.CommonImage, "date")
+		cmd.WithPseudoTTY()
+		cmd.Run(&test.Expected{
+			ExitCode: 0,
+		})
+		oldNumFifos, err := countFIFOFiles("/run/containerd/fifo/")
+		assert.NilError(t, err)
+		t.Logf("oldNumFifos %d", oldNumFifos)
+		cmd = helpers.Command("run", "-it", "--rm", "--name", data.Identifier(),
+			testutil.CommonImage, "date")
+		cmd.WithPseudoTTY()
+		cmd.Run(&test.Expected{
+			ExitCode: 0,
+		})
+		newNumFifos, err := countFIFOFiles("/run/containerd/fifo/")
+		assert.NilError(t, err)
+		t.Logf("oldNumFifos %d", newNumFifos)
+		assert.Equal(t, oldNumFifos, newNumFifos)
+	}
 }
