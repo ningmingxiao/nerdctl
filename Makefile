@@ -237,17 +237,17 @@ install-dev-tools:
 ##########################
 test-unit:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) $(MAKEFILE_DIR)/pkg/...
+	@go test -v $(VERBOSE_FLAG) $(MAKEFILE_DIR)/pkg/...
 	$(call footer, $@)
 
 test-unit-bench:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) $(MAKEFILE_DIR)/pkg/... -bench=.
+	@go test -v $(VERBOSE_FLAG) $(MAKEFILE_DIR)/pkg/... -bench=.
 	$(call footer, $@)
 
 test-unit-race:
 	$(call title, $@)
-	@go test $(VERBOSE_FLAG) $(MAKEFILE_DIR)/pkg/... -race
+	@go test -v $(VERBOSE_FLAG) $(MAKEFILE_DIR)/pkg/... -race
 	$(call footer, $@)
 
 ##########################
