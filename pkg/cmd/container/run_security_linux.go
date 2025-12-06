@@ -17,14 +17,19 @@
 package container
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/opencontainers/selinux/go-selinux/label"
+
 	"github.com/containerd/containerd/v2/contrib/apparmor"
 	"github.com/containerd/containerd/v2/contrib/seccomp"
+	"github.com/containerd/containerd/v2/core/containers"
 	"github.com/containerd/containerd/v2/pkg/cap"
 	"github.com/containerd/containerd/v2/pkg/oci"
 	"github.com/containerd/log"
@@ -51,10 +56,11 @@ const (
 	systemPathsUnconfined = "unconfined"
 )
 
-func generateSecurityOpts(privileged bool, securityOptsMap map[string]string) ([]oci.SpecOpts, error) {
+func generateSecurityOpts(privileged bool, selinuxEnabled bool, securityOptsMap map[string]string) ([]oci.SpecOpts, string, error) {
+	var mountLabel string
 	for k := range securityOptsMap {
 		switch k {
-		case "seccomp", "apparmor", "no-new-privileges", "systempaths", "privileged-without-host-devices", "writable-cgroups":
+		case "seccomp", "apparmor", "no-new-privileges", "systempaths", "privileged-without-host-devices", "writable-cgroups", "label":
 		default:
 			log.L.Warnf("unknown security-opt: %q", k)
 		}
@@ -62,7 +68,7 @@ func generateSecurityOpts(privileged bool, securityOptsMap map[string]string) ([
 	var opts []oci.SpecOpts
 	if seccompProfile, ok := securityOptsMap["seccomp"]; ok && seccompProfile != defaults.SeccompProfileName {
 		if seccompProfile == "" {
-			return nil, errors.New("invalid security-opt \"seccomp\"")
+			return nil, mountLabel, errors.New("invalid security-opt \"seccomp\"")
 		}
 
 		if seccompProfile != "unconfined" {
@@ -76,7 +82,7 @@ func generateSecurityOpts(privileged bool, securityOptsMap map[string]string) ([
 	canApplyExistingProfile := apparmorutil.CanApplyExistingProfile()
 	if aaProfile, ok := securityOptsMap["apparmor"]; ok {
 		if aaProfile == "" {
-			return nil, errors.New("invalid security-opt \"apparmor\"")
+			return nil, mountLabel, errors.New("invalid security-opt \"apparmor\"")
 		}
 		if aaProfile != "unconfined" {
 			if !canApplyExistingProfile {
@@ -88,17 +94,39 @@ func generateSecurityOpts(privileged bool, securityOptsMap map[string]string) ([
 	} else {
 		if canLoadNewAppArmor {
 			if err := apparmor.LoadDefaultProfile(defaults.AppArmorProfileName); err != nil {
-				return nil, err
+				return nil, mountLabel, err
 			}
 		}
 		if apparmorutil.CanApplySpecificExistingProfile(defaults.AppArmorProfileName) {
 			opts = append(opts, apparmor.WithProfile(defaults.AppArmorProfileName))
 		}
 	}
+	var labelOpts []string
+	if selinuxLabel, ok := securityOptsMap["label"]; ok {
+		labelOpts = append(labelOpts, selinuxLabel)
+		if selinuxLabel != "disable" {
+			processLabel, label, err := label.InitLabels(labelOpts)
+			if err != nil {
+				return nil, mountLabel, err
+			}
+			mountLabel = label
+			opts = append(opts, WithSelinuxLabel(processLabel, mountLabel))
+		}
+		mountLabel = ""
+	}
+	// if selinux-enabled=true and security-opt selinux label is not set.
+	if selinuxEnabled && len(labelOpts) == 0 {
+		processLabel, label, err := label.InitLabels(labelOpts)
+		if err != nil {
+			return nil, mountLabel, err
+		}
+		mountLabel = label
+		opts = append(opts, WithSelinuxLabel(processLabel, mountLabel))
+	}
 
 	nnp, err := maputil.MapBoolValueAsOpt(securityOptsMap, "no-new-privileges")
 	if err != nil {
-		return nil, err
+		return nil, mountLabel, err
 	}
 
 	if !nnp {
@@ -109,21 +137,21 @@ func generateSecurityOpts(privileged bool, securityOptsMap map[string]string) ([
 		opts = append(opts, oci.WithMaskedPaths(nil))
 		opts = append(opts, oci.WithReadonlyPaths(nil))
 	} else if ok && value != systemPathsUnconfined {
-		return nil, errors.New(`invalid security-opt "systempaths=unconfined"`)
+		return nil, mountLabel, errors.New(`invalid security-opt "systempaths=unconfined"`)
 	}
 
 	privilegedWithoutHostDevices, err := maputil.MapBoolValueAsOpt(securityOptsMap, "privileged-without-host-devices")
 	if err != nil {
-		return nil, err
+		return nil, mountLabel, err
 	}
 
 	if privilegedWithoutHostDevices && !privileged {
-		return nil, errors.New("flag `--security-opt privileged-without-host-devices` can't be used without `--privileged` enabled")
+		return nil, mountLabel, errors.New("flag `--security-opt privileged-without-host-devices` can't be used without `--privileged` enabled")
 	}
 	if value, ok := securityOptsMap["writable-cgroups"]; ok {
 		writable, err := strconv.ParseBool(value)
 		if err != nil {
-			return nil, fmt.Errorf("invalid \"writable-cgroups\" value: %q", value)
+			return nil, mountLabel, fmt.Errorf("invalid \"writable-cgroups\" value: %q", value)
 		}
 		if writable {
 			opts = append(opts, oci.WithWriteableCgroupfs)
@@ -138,7 +166,22 @@ func generateSecurityOpts(privileged bool, securityOptsMap map[string]string) ([
 		}
 	}
 
-	return opts, nil
+	return opts, mountLabel, nil
+}
+
+// WithSelinuxLabels sets the mount and process labels
+func WithSelinuxLabel(process, mount string) oci.SpecOpts {
+	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+		if s.Linux == nil {
+			s.Linux = &specs.Linux{}
+		}
+		if s.Process == nil {
+			s.Process = &specs.Process{}
+		}
+		s.Linux.MountLabel = mount
+		s.Process.SelinuxLabel = process
+		return nil
+	}
 }
 
 func canonicalizeCapName(s string) string {

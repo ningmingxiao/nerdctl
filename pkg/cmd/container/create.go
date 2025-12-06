@@ -122,7 +122,7 @@ func Create(ctx context.Context, client *containerd.Client, args []string, netMa
 		oci.WithDefaultSpec(),
 	)
 
-	platformOpts, err := setPlatformOptions(ctx, client, id, netManager.NetworkOptions().UTSNamespace, &internalLabels, options)
+	platformOpts, mountLabel, err := setPlatformOptions(ctx, client, id, netManager.NetworkOptions().UTSNamespace, &internalLabels, options)
 	if err != nil {
 		return nil, generateRemoveStateDirFunc(ctx, id, internalLabels), err
 	}
@@ -401,7 +401,9 @@ func Create(ctx context.Context, client *containerd.Client, args []string, netMa
 
 	opts = append(opts, propagateInternalContainerdLabelsToOCIAnnotations(),
 		oci.WithAnnotations(strutil.ConvertKVStringsToMap(options.Annotations)))
-
+	if mountLabel != "" {
+		opts = append(opts, SetMountSelinuxLabel(mountLabel))
+	}
 	var s specs.Spec
 	spec := containerd.WithSpec(&s, opts...)
 

@@ -37,6 +37,7 @@ import (
 	"github.com/containerd/nerdctl/v2/pkg/ipcutil"
 	"github.com/containerd/nerdctl/v2/pkg/rootlessutil"
 	"github.com/containerd/nerdctl/v2/pkg/strutil"
+	"github.com/opencontainers/selinux/go-selinux/label"
 )
 
 // WithoutRunMount returns a SpecOpts that unmounts the default tmpfs on "/run"
@@ -44,7 +45,18 @@ func WithoutRunMount() func(ctx context.Context, client oci.Client, c *container
 	return oci.WithoutRunMount
 }
 
-func setPlatformOptions(ctx context.Context, client *containerd.Client, id, uts string, internalLabels *internalLabels, options types.ContainerCreateOptions) ([]oci.SpecOpts, error) {
+func SetMountSelinuxLabel(mountLabel string) oci.SpecOpts {
+	return func(_ context.Context, _ oci.Client, _ *containers.Container, s *oci.Spec) error {
+		for _, mount := range s.Mounts {
+			if err := label.Relabel(mount.Source, mountLabel, false); err != nil {
+				return fmt.Errorf("relabel %q with %q failed: %w", mount.Source, mountLabel, err)
+			}
+		}
+		return nil
+	}
+}
+
+func setPlatformOptions(ctx context.Context, client *containerd.Client, id, uts string, internalLabels *internalLabels, options types.ContainerCreateOptions) ([]oci.SpecOpts, string, error) {
 	var opts []oci.SpecOpts
 	opts = append(opts,
 		oci.WithDefaultUnixDevices,
@@ -58,7 +70,7 @@ func setPlatformOptions(ctx context.Context, client *containerd.Client, id, uts 
 
 	cgOpts, err := generateCgroupOpts(id, options, internalLabels)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	opts = append(opts, cgOpts...)
 
@@ -68,25 +80,25 @@ func setPlatformOptions(ctx context.Context, client *containerd.Client, id, uts 
 		strutil.DedupeStrSlice(options.CapAdd),
 		strutil.DedupeStrSlice(options.CapDrop))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	opts = append(opts, capOpts...)
 	securityOptsMaps := strutil.ConvertKVStringsToMap(strutil.DedupeStrSlice(options.SecurityOpt))
-	secOpts, err := generateSecurityOpts(options.Privileged, securityOptsMaps)
+	secOpts, mountLabel, err := generateSecurityOpts(options.Privileged, options.GOptions.SelinuxEnabled, securityOptsMaps)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	opts = append(opts, secOpts...)
 
 	b4nnOpts, err := bypass4netnsutil.GenerateBypass4netnsOpts(securityOptsMaps, annotations, id)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	opts = append(opts, b4nnOpts...)
 
 	ulimitOpts, err := generateUlimitsOpts(options.Ulimit)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// If without any ulimitOpts, we need to reset the default value from spec
@@ -101,7 +113,7 @@ func setPlatformOptions(ctx context.Context, client *containerd.Client, id, uts 
 	}
 	gpuOpt, err := parseGPUOpts(options.GPUs)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	opts = append(opts, gpuOpt...)
 
@@ -111,16 +123,16 @@ func setPlatformOptions(ctx context.Context, client *containerd.Client, id, uts 
 
 	nsOpts, err := generateNamespaceOpts(ctx, client, uts, internalLabels, options)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	opts = append(opts, nsOpts...)
-
+	// opts = append(opts, SetMountSelinuxLabel(label))
 	opts, err = setOOMScoreAdj(opts, options.OomScoreAdjChanged, options.OomScoreAdj)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return opts, nil
+	return opts, mountLabel, nil
 }
 
 // generateNamespaceOpts help to validate the namespace options exposed via run and return the correct opts.
