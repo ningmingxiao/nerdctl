@@ -748,6 +748,9 @@ func onPostStop(opts *handlerOpts) error {
 	if err = killProcessByPidFile(portReserverPidFile); err != nil {
 		log.L.WithError(err).Errorf("failed to kill the port-reserver process")
 	}
+	if err := os.RemoveAll(filepath.Dir(portReserverPidFile)); err != nil {
+		log.L.WithError(err).Errorf("failed to remove the port-reserver directory %s", filepath.Dir(portReserverPidFile))
+	}
 	return nil
 }
 
