@@ -503,6 +503,7 @@ func applyNetworkSettings(opts *handlerOpts) (err error) {
 			if err != nil {
 				log.L.Debugf("killing the port reserver process (pid=%d)", reserverCmdPid)
 				_ = reserverCmd.Process.Kill()
+				_ = os.RemoveAll(filepath.Dir(portReserverPidFilePath(opts)))
 			}
 		}()
 		if err := writePidFile(portReserverPidFilePath(opts), reserverCmdPid); err != nil {
