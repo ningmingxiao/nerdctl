@@ -70,6 +70,7 @@ func TestRunWithSystemdTrueEnabled(t *testing.T) {
 	testCase.Require = require.All(
 		require.Amd64,
 		require.Not(nerdtest.Docker),
+		nerdtest.NerdctlNeedsFixing("https://github.com/containerd/nerdctl/issues/4746"),
 	)
 
 	testCase.Setup = func(data test.Data, helpers test.Helpers) {

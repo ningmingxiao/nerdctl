@@ -44,6 +44,7 @@ bar
 
 	testCase := nerdtest.Setup()
 
+	testCase.Require = nerdtest.IsFlaky("https://github.com/containerd/nerdctl/issues/4782")
 	if runtime.GOOS == "windows" {
 		testCase.Require = nerdtest.NerdctlNeedsFixing("https://github.com/containerd/nerdctl/issues/4237")
 	}
