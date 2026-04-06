@@ -98,7 +98,7 @@ RUN git-checkout-tag-with-hash.sh ${RUNC_VERSION} && \
   mkdir -p /out
 ENV CGO_ENABLED=1
 # FIXME: avoid omitting libpathrs
-RUN set -x ; GO=xx-go CC=$(xx-info)-gcc STRIP=$(xx-info)-strip make BUILDTAGS="$(grep -oP "^BUILDTAGS := \K.*" Makefile  | sed -e s/libpathrs//)" static && \
+RUN set -x ; GO=xx-go CC=$(xx-info)-gcc STRIP=$(xx-info)-strip make RUNC_BUILDTAGS="-libpathrs" static && \
   xx-verify --static runc && cp -v -a runc /out/runc.${TARGETARCH}
 
 FROM build-base AS build-bypass4netns
