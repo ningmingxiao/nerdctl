@@ -38,7 +38,7 @@ func TestLoadStdinFromPipe(t *testing.T) {
 
 	testCase := &test.Case{
 		Description: "TestLoadStdinFromPipe",
-		Require:     require.All(require.Linux, nerdtest.IsFlaky("https://github.com/containerd/nerdctl/issues/4789")),
+		Require:     require.Linux,
 		Setup: func(data test.Data, helpers test.Helpers) {
 			identifier := data.Identifier()
 			helpers.Ensure("pull", "--quiet", testutil.CommonImage)
