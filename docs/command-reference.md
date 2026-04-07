@@ -343,7 +343,6 @@ Health check flags:
 - :whale: `--health-timeout`: Time to wait before considering the check failed (e.g., 5s)
 - :whale: `--health-retries`: Number of failures before container is considered unhealthy
 - :whale: `--health-start-period`: Start period for the container to initialize before starting health-retries countdown
-- :whale: `--health-start-interval`: Interval between checks during the start period
 - :whale: `--no-healthcheck`: Disable any health checks defined by image or CLI
 
 Logging flags:
@@ -454,7 +453,8 @@ IPFS flags:
 
 Unimplemented `docker run` flags:
     `--device-cgroup-rule`, `--disable-content-trust`, `--expose`,
-    `--link*`, `--publish-all`, `--storage-opt`, `--volume-driver`
+    `--health-start-interval`, `--link*`, `--publish-all`, `--storage-opt`,
+    `--volume-driver`
 
 ### :whale: nerdctl exec
 
@@ -1809,7 +1809,7 @@ Push service images
 
 Usage: `nerdctl compose push [OPTIONS] [SERVICE...]`
 
-Unimplemented `docker-compose pull` (V1) flags: `--ignore-push-failures`
+Unimplemented `docker-compose push` (V1) flags: `--ignore-push-failures`
 
 ### :whale: nerdctl compose pause
 
@@ -1994,7 +1994,13 @@ Network management:
 
 Compose:
 
-- `docker-compose events|scale`
+- `docker compose attach`
+- `docker compose events`
+- `docker compose ls`
+- `docker compose scale`
+- `docker compose stats`
+- `docker compose wait`
+- `docker compose watch`
 
 Builder:
 
