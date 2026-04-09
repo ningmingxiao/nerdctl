@@ -43,7 +43,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/ipfs/go-cid v0.6.0
 	github.com/klauspost/compress v1.18.5
-	github.com/mattn/go-isatty v0.0.20 //gomodjail:unconfined
+	github.com/mattn/go-isatty v0.0.21 //gomodjail:unconfined
 	github.com/moby/sys/mount v0.3.4
 	github.com/moby/sys/signal v0.7.1
 	github.com/moby/sys/user v0.4.0 //gomodjail:unconfined
