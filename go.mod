@@ -41,7 +41,7 @@ require (
 	github.com/fluent/fluent-logger-golang v1.10.1
 	github.com/fsnotify/fsnotify v1.9.0 //gomodjail:unconfined
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/ipfs/go-cid v0.6.0
+	github.com/ipfs/go-cid v0.6.1
 	github.com/klauspost/compress v1.18.5
 	github.com/mattn/go-isatty v0.0.21 //gomodjail:unconfined
 	github.com/moby/sys/mount v0.3.4
@@ -105,11 +105,11 @@ require (
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/moby/sys/sequential v0.6.0 // indirect
 	github.com/moby/sys/symlink v0.3.0 // indirect
-	github.com/mr-tron/base58 v1.2.0 // indirect
+	github.com/mr-tron/base58 v1.3.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
 	github.com/multiformats/go-multiaddr v0.16.1 // indirect
-	github.com/multiformats/go-multibase v0.2.0 // indirect
+	github.com/multiformats/go-multibase v0.3.0 // indirect
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-varint v0.1.0 // indirect
 	github.com/opencontainers/runtime-tools v0.9.1-0.20251114084447-edf4cb3d2116 // indirect
