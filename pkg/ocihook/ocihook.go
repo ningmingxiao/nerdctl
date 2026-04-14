@@ -33,7 +33,7 @@ import (
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	b4nndclient "github.com/rootless-containers/bypass4netns/pkg/api/daemon/client"
-	rlkclient "github.com/rootless-containers/rootlesskit/v2/pkg/api/client"
+	rlkclient "github.com/rootless-containers/rootlesskit/v3/pkg/api/client"
 
 	"github.com/containerd/go-cni"
 	"github.com/containerd/log"

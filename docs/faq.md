@@ -311,9 +311,9 @@ See also:
 - https://rootlesscontaine.rs/getting-started/containerd/
 
 ### `nerdctl run -p <PORT>` does not propagate source IP
-Expected behavior with the default `rootlesskit` port driver.
+Make sure that nerdctl is running with RootlessKit v3.0 or later.
 
-The solution is to change the port driver to `slirp4netns` (sacrifices performance).
+For older version of RootlessKit, change the port driver to `slirp4netns` (sacrifices performance).
 
 See https://rootlesscontaine.rs/getting-started/containerd/#changing-the-port-forwarder .
 
