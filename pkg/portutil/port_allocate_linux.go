@@ -17,8 +17,10 @@
 package portutil
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/containerd/nerdctl/v2/pkg/portutil/iptable"
 	"github.com/containerd/nerdctl/v2/pkg/portutil/procnet"
@@ -87,14 +89,14 @@ func getUsedPorts(ip string, protocol string) (map[uint64]bool, error) {
 	// So we need some trick to process this situation.
 	if protocol == "tcp" {
 		tempTCPV6Data, err := procnet.ReadStatsFileData("tcp6")
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
 		netprocItems = append(netprocItems, procnet.Parse(tempTCPV6Data)...)
 	}
 	if protocol == "udp" {
 		tempUDPV6Data, err := procnet.ReadStatsFileData("udp6")
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
 		netprocItems = append(netprocItems, procnet.Parse(tempUDPV6Data)...)
