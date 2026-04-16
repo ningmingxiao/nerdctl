@@ -33,7 +33,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.6.1 //gomodjail:unconfined
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.4.0+incompatible //gomodjail:unconfined
-	github.com/docker/docker v28.5.2+incompatible //gomodjail:unconfined
 	github.com/docker/go-connections v0.7.0
 	github.com/docker/go-units v0.5.0
 	github.com/fahedouch/go-logrotate v0.3.0 //gomodjail:unconfined
@@ -44,6 +43,8 @@ require (
 	github.com/ipfs/go-cid v0.6.1
 	github.com/klauspost/compress v1.18.5
 	github.com/mattn/go-isatty v0.0.21 //gomodjail:unconfined
+	github.com/moby/moby/client v0.4.0
+	github.com/moby/moby/v2 v2.0.0-beta.9
 	github.com/moby/sys/mount v0.3.4
 	github.com/moby/sys/signal v0.7.1
 	github.com/moby/sys/user v0.4.0 //gomodjail:unconfined
@@ -75,7 +76,7 @@ require (
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
-	github.com/cilium/ebpf v0.16.0 // indirect
+	github.com/cilium/ebpf v0.17.3 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/go-runc v1.1.0 // indirect
 	github.com/containerd/plugin v1.0.0 // indirect
@@ -88,7 +89,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -148,8 +149,7 @@ require (
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/moby/moby/api v1.52.0 // indirect
-	github.com/moby/moby/client v0.1.0 // indirect
+	github.com/moby/moby/api v1.54.1 // indirect
 	github.com/moby/sys/capability v0.4.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 )

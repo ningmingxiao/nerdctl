@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/pkg/sysinfo"
+	"github.com/moby/moby/v2/pkg/sysinfo"
 
 	containerd "github.com/containerd/containerd/v2/client"
 	"github.com/containerd/containerd/v2/core/introspection"
