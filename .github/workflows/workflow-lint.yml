@@ -67,8 +67,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Build for both old and stable go
-          - go-version: "1.25"
           - go-version: "1.26"
           # Additionally build for canary
           - go-version: "1.26"
