@@ -21,8 +21,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/docker/docker/pkg/meminfo"
-	"github.com/docker/docker/pkg/sysinfo"
+	"github.com/moby/moby/v2/pkg/meminfo"
+	"github.com/moby/moby/v2/pkg/sysinfo"
 
 	"github.com/containerd/cgroups/v3"
 

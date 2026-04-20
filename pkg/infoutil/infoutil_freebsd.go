@@ -17,7 +17,7 @@
 package infoutil
 
 import (
-	"github.com/docker/docker/pkg/sysinfo"
+	"github.com/moby/moby/v2/pkg/sysinfo"
 
 	"github.com/containerd/nerdctl/v2/pkg/inspecttypes/dockercompat"
 )
