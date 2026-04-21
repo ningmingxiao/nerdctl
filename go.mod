@@ -147,6 +147,8 @@ require (
 	tags.cncf.io/container-device-interface/specs-go v1.1.0 // indirect
 )
 
+require github.com/google/uuid v1.6.0
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/moby/moby/api v1.54.1 // indirect
