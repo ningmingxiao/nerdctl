@@ -22,25 +22,32 @@ import (
 	"strings"
 	"testing"
 
-	"gotest.tools/v3/assert"
-
 	"github.com/containerd/nerdctl/mod/tigron/expect"
 	"github.com/containerd/nerdctl/mod/tigron/require"
 	"github.com/containerd/nerdctl/mod/tigron/test"
 	"github.com/containerd/nerdctl/mod/tigron/tig"
-
 	"github.com/containerd/nerdctl/v2/pkg/testutil"
 	"github.com/containerd/nerdctl/v2/pkg/testutil/nerdtest"
+	"github.com/google/uuid"
+	"gotest.tools/v3/assert"
 )
 
 func TestLoadStdinFromPipe(t *testing.T) {
+	defer func() {
+		filePath := "/tmp/nerdc.log"
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return
+		}
+		t.Logf("nmxlog is %s", string(content))
+	}()
 	nerdtest.Setup()
 
 	testCase := &test.Case{
 		Description: "TestLoadStdinFromPipe",
 		Require:     require.Linux,
 		Setup: func(data test.Data, helpers test.Helpers) {
-			identifier := data.Identifier()
+			identifier := data.Identifier() + uuid.New().String()
 			helpers.Ensure("pull", "--quiet", testutil.CommonImage)
 			helpers.Ensure("tag", testutil.CommonImage, identifier)
 			helpers.Ensure("save", identifier, "-o", filepath.Join(data.Temp().Path(), "common.tar"))

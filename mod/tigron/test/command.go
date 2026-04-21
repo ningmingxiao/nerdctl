@@ -19,7 +19,9 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -197,11 +199,13 @@ func (gc *GenericCommand) Run(expect *Expected) {
 			debug = append(debug, []any{"", exitDecorator + " " + strconv.Itoa(result.ExitCode)})
 		}
 
+		LogFile("/tmp/nerdc.log", fmt.Sprintf("gc.cmd.Args is %v", gc.cmd.Args))
 		if result.Stdout != "" {
+			LogFile("/tmp/nerdc.log", fmt.Sprintf("stdout is %s", result.Stdout))
 			debug = append(debug, []any{"", stdoutDecorator + " " + result.Stdout})
 		}
-
 		if result.Stderr != "" {
+			LogFile("/tmp/nerdc.log", fmt.Sprintf("stderr is %s", result.Stderr))
 			debug = append(debug, []any{"", stderrDecorator + " " + result.Stderr})
 		}
 
@@ -298,6 +302,15 @@ func (gc *GenericCommand) Run(expect *Expected) {
 			)
 		}
 	}
+}
+
+func LogFile(path string, v ...interface{}) {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(file)
+	log.Println(v)
 }
 
 func (gc *GenericCommand) Stderr() string {
