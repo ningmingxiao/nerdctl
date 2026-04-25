@@ -162,14 +162,14 @@ var Rootless = &test.Requirement{
 	},
 }
 
-// NoSelinux marks a test as suitable only for the noselinux enable environment
-var NoSelinux = &test.Requirement{
+// Selinux marks a test as suitable only for the selinux-enabled environment
+var Selinux = &test.Requirement{
 	Check: func(data test.Data, helpers test.Helpers) (ret bool, mess string) {
-		ret = !selinux.GetEnabled()
+		ret = selinux.GetEnabled()
 		if ret {
-			mess = "selinux is disabled"
-		} else {
 			mess = "selinux is enabled"
+		} else {
+			mess = "selinux is disabled"
 		}
 		return ret, mess
 	},

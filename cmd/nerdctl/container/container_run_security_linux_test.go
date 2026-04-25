@@ -27,7 +27,6 @@ import (
 	"gotest.tools/v3/assert"
 
 	"github.com/containerd/nerdctl/mod/tigron/expect"
-	"github.com/containerd/nerdctl/mod/tigron/require"
 	"github.com/containerd/nerdctl/mod/tigron/test"
 	"github.com/containerd/nerdctl/mod/tigron/tig"
 
@@ -194,7 +193,7 @@ func TestRunApparmor(t *testing.T) {
 
 func TestRunSelinuxWithSecurityOpt(t *testing.T) {
 	testCase := nerdtest.Setup()
-	testCase.Require = require.Not(nerdtest.NoSelinux)
+	testCase.Require = nerdtest.Selinux
 	testContainer := testutil.Identifier(t)
 
 	testCase.SubTests = []*test.Case{
@@ -227,7 +226,7 @@ func TestRunSelinuxWithSecurityOpt(t *testing.T) {
 }
 func TestRunSelinux(t *testing.T) {
 	testCase := nerdtest.Setup()
-	testCase.Require = require.Not(nerdtest.NoSelinux)
+	testCase.Require = nerdtest.Selinux
 	testContainer := testutil.Identifier(t)
 
 	testCase.SubTests = []*test.Case{
@@ -261,7 +260,7 @@ func TestRunSelinux(t *testing.T) {
 
 func TestRunSelinuxWithVolumeLabel(t *testing.T) {
 	testCase := nerdtest.Setup()
-	testCase.Require = require.Not(nerdtest.NoSelinux)
+	testCase.Require = nerdtest.Selinux
 	testContainer := testutil.Identifier(t)
 
 	testCase.SubTests = []*test.Case{
