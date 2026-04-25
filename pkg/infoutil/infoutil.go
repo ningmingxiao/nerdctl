@@ -62,7 +62,7 @@ func NativeDaemonInfo(ctx context.Context, client *containerd.Client) (*native.D
 	return daemonInfo, nil
 }
 
-func Info(ctx context.Context, client *containerd.Client, snapshotter, cgroupManager string) (*dockercompat.Info, error) {
+func Info(ctx context.Context, client *containerd.Client, snapshotter, cgroupManager string, selinuxEnabled bool) (*dockercompat.Info, error) {
 	daemonVersion, err := client.Version(ctx)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func Info(ctx context.Context, client *containerd.Client, snapshotter, cgroupMan
 		return nil, err
 	}
 	info.ServerVersion = daemonVersion.Version
-	fulfillPlatformInfo(&info)
+	fulfillPlatformInfo(&info, selinuxEnabled)
 	return &info, nil
 }
 

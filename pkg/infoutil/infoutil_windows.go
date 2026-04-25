@@ -194,7 +194,7 @@ func CgroupsVersion() string {
 	return ""
 }
 
-func fulfillPlatformInfo(info *dockercompat.Info) {
+func fulfillPlatformInfo(info *dockercompat.Info, selinuxEnabled bool) {
 	mobySysInfo := mobySysInfo(info)
 
 	// NOTE: cgroup fields are not available on Windows

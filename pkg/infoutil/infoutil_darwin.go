@@ -28,7 +28,7 @@ func CgroupsVersion() string {
 	return ""
 }
 
-func fulfillPlatformInfo(info *dockercompat.Info) {
+func fulfillPlatformInfo(info *dockercompat.Info, selinuxEnabled bool) {
 	// unimplemented
 }
 
