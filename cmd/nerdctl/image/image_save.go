@@ -91,7 +91,14 @@ func saveAction(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		output = f
-		defer f.Close()
+		defer func() {
+			if err := f.Sync(); err != nil {
+				f.Close()
+				return
+			}
+			f.Close()
+		}()
+
 	} else if out, ok := output.(*os.File); ok && isatty.IsTerminal(out.Fd()) {
 		return fmt.Errorf("cowardly refusing to save to a terminal. Use the -o flag or redirect")
 	}
