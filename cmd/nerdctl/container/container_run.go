@@ -19,8 +19,10 @@ package container
 import (
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -457,6 +459,17 @@ func runAction(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("/tmp/create")
+	os.Create("/tmp/create")
+	for {
+		_, err := os.Stat("/tmp/changes")
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		fmt.Println("/tmp/changes")
+		break
+	}
 
 	statusC, err := task.Wait(ctx)
 	if err != nil {
@@ -466,6 +479,10 @@ func runAction(cmd *cobra.Command, args []string) error {
 	if err := task.Start(ctx); err != nil {
 		return err
 	}
+	defer func() {
+		os.Create("/tmp/start")
+		fmt.Println("/tmp/start")
+	}()
 
 	// Setup container healthchecks.
 	if err := healthcheck.CreateTimer(ctx, c, (*config.Config)(&createOpt.GOptions), createOpt.NerdctlCmd, createOpt.NerdctlArgs); err != nil {
