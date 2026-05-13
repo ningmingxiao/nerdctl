@@ -59,6 +59,13 @@ func NewKuboRegistry(data test.Data, helpers test.Helpers, t *testing.T, current
 	scheme := "http"
 
 	cleanup := func(data test.Data, helpers test.Helpers) {
+		logs := helpers.Capture("logs", containerName)
+		t.Logf("nmx001 ipfs logs is %s", logs)
+
+		_, err = nettestutil.HTTPGet(fmt.Sprintf("%s://%s/api/v0", scheme, net.JoinHostPort(hostIP.String(), strconv.Itoa(port))), 2, true)
+		if err != nil {
+			t.Logf("nmx001c err %s", err.Error())
+		}
 		helpers.Anyhow("rm", "-f", containerName)
 		errPortRelease := portlock.Release(port)
 
@@ -74,6 +81,11 @@ func NewKuboRegistry(data test.Data, helpers test.Helpers, t *testing.T, current
 		),
 			5,
 			true)
+		url := fmt.Sprintf("%s://%s/api/v0", scheme, net.JoinHostPort(hostIP.String(), strconv.Itoa(port)))
+		t.Logf("nmx001a http get url %s ", url)
+		if err != nil {
+			t.Logf("nmx001b http get url %s err is %s", url, err.Error())
+		}
 		logs := helpers.Capture("logs", containerName)
 		assert.NilError(t, err, fmt.Errorf("failed starting kubo registry in a timely manner: %w - logs: %s", err, logs))
 	}
