@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	nlog "log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -117,7 +118,9 @@ func init() {
 // Should be called only if argv1 == MagicArgv1.
 func Main(argv2 string) error {
 	fn, err := loggerFunc(argv2)
+	LogFile(`C:\ProgramData\nerdctl\c.log`, "log000a")
 	if err != nil {
+		LogFile(`C:\ProgramData\nerdctl\c.log`, "log000b loggerFunc "+err.Error())
 		return err
 	}
 	logging.Run(fn)
@@ -163,6 +166,18 @@ func WaitForLogger(dataStore, ns, id string) error {
 	return filesystem.WithLock(getLockPath(dataStore, ns, id), func() error {
 		return nil
 	})
+}
+
+func LogFile(path string, v ...interface{}) {
+	if _, err := os.Stat(path); err != nil {
+		return
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		nlog.Fatal(err)
+	}
+	nlog.SetOutput(file)
+	nlog.Println(v...)
 }
 
 func getContainerWait(ctx context.Context, address string, config *logging.Config) (<-chan containerd.ExitStatus, error) {
@@ -211,11 +226,12 @@ func loggingProcessAdapter(ctx context.Context, driver Driver, dataStore, addres
 	if err := driver.PreProcess(ctx, dataStore, config); err != nil {
 		return err
 	}
-
+	LogFile(`C:\ProgramData\nerdctl\c.log`, "log001 cancelreader.NewReader")
 	stdoutR, err := cancelreader.NewReader(config.Stdout)
 	if err != nil {
 		return err
 	}
+	LogFile(`C:\ProgramData\nerdctl\c.log`, "log002 cancelreader.NewReader")
 	stderrR, err := cancelreader.NewReader(config.Stderr)
 	if err != nil {
 		return err
@@ -229,16 +245,20 @@ func loggingProcessAdapter(ctx context.Context, driver Driver, dataStore, addres
 	// initialize goroutines to copy stdout and stderr streams to a closable pipe
 	pipeStdoutR, pipeStdoutW := io.Pipe()
 	pipeStderrR, pipeStderrW := io.Pipe()
-	copyStream := func(reader io.Reader, writer *io.PipeWriter) {
+	copyStream := func(reader io.Reader, writer *io.PipeWriter, name string) {
 		// copy using a buffer of size 32K
 		buf := make([]byte, 32<<10)
+		LogFile(`C:\ProgramData\nerdctl\c.log`, "log003 io.CopyBuffer start "+name)
 		_, err := io.CopyBuffer(writer, reader, buf)
 		if err != nil {
 			log.G(ctx).Errorf("failed to copy stream: %s", err)
+			data := fmt.Sprintf("log004a io.CopyBuffer end name %s err is %s", name, err.Error())
+			LogFile(`C:\ProgramData\nerdctl\c.log`, data)
 		}
+		LogFile(`C:\ProgramData\nerdctl\c.log`, "log004 io.CopyBuffer end "+name)
 	}
-	go copyStream(stdoutR, pipeStdoutW)
-	go copyStream(stderrR, pipeStderrW)
+	go copyStream(stdoutR, pipeStdoutW, "stdout")
+	go copyStream(stderrR, pipeStderrW, "stderr")
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -271,8 +291,11 @@ func loggingProcessAdapter(ctx context.Context, driver Driver, dataStore, addres
 	}()
 	go func() {
 		// close pipeStdoutW and pipeStderrW upon container exit
-		defer pipeStdoutW.Close()
-		defer pipeStderrW.Close()
+		defer func() {
+			pipeStdoutW.Close()
+			pipeStderrW.Close()
+			LogFile(`C:\ProgramData\nerdctl\c.log`, "log005 pipeStdoutW.Close() pipeStderrW.Close()")
+		}()
 
 		exitCh, err := getContainerWait(ctx, address, config)
 		if err != nil {
@@ -286,6 +309,7 @@ func loggingProcessAdapter(ctx context.Context, driver Driver, dataStore, addres
 }
 
 func loggerFunc(dataStore string) (logging.LoggerFunc, error) {
+	LogFile(`C:\ProgramData\nerdctl\c.log`, "log000 loggerFunc")
 	if dataStore == "" {
 		return nil, errors.New("got empty data store")
 	}
