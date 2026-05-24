@@ -17,6 +17,7 @@
 package image
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,20 +35,32 @@ import (
 )
 
 func TestLoadStdinFromPipe(t *testing.T) {
-	nerdtest.Setup()
+	for i := 0; i < 200; i++ {
+		testLoadStdinFromPipe(t, i)
+	}
+}
 
+var baseImagePrepared = false
+
+func testLoadStdinFromPipe(t *testing.T, times int) {
+	nerdtest.Setup()
+	nerdtest.Setup().NoParallel = true
+	identifier := fmt.Sprintf("%s_%d", strings.ToLower(t.Name()), times)
 	testCase := &test.Case{
+		NoParallel:  true,
 		Description: "TestLoadStdinFromPipe",
 		Require:     require.Linux,
 		Setup: func(data test.Data, helpers test.Helpers) {
-			identifier := data.Identifier()
-			helpers.Ensure("pull", "--quiet", testutil.CommonImage)
+			if !baseImagePrepared {
+				helpers.Ensure("pull", "--quiet", testutil.CommonImage)
+				baseImagePrepared = true
+			}
 			helpers.Ensure("tag", testutil.CommonImage, identifier)
 			helpers.Ensure("save", identifier, "-o", filepath.Join(data.Temp().Path(), "common.tar"))
 			helpers.Ensure("rmi", "-f", identifier)
 		},
 		Cleanup: func(data test.Data, helpers test.Helpers) {
-			helpers.Anyhow("rmi", "-f", data.Identifier())
+			helpers.Anyhow("rmi", "-f", identifier)
 		},
 		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
 			cmd := helpers.Command("load")
@@ -57,9 +70,10 @@ func TestLoadStdinFromPipe(t *testing.T) {
 			return cmd
 		},
 		Expected: func(data test.Data, helpers test.Helpers) *test.Expected {
-			identifier := data.Identifier()
 			return &test.Expected{
 				Output: expect.All(
+					// fix me see https://github.com/containerd/containerd/issues/13097
+					// container image can't include dash
 					expect.Contains(identifier),
 					func(stdout string, t tig.T) {
 						assert.Assert(t, strings.Contains(helpers.Capture("images"), identifier))
@@ -87,18 +101,17 @@ func TestLoadStdinEmpty(t *testing.T) {
 
 func TestLoadQuiet(t *testing.T) {
 	nerdtest.Setup()
-
+	identifier := "testloadq"
 	testCase := &test.Case{
 		Description: "TestLoadQuiet",
 		Setup: func(data test.Data, helpers test.Helpers) {
-			identifier := data.Identifier()
 			helpers.Ensure("pull", "--quiet", testutil.CommonImage)
 			helpers.Ensure("tag", testutil.CommonImage, identifier)
 			helpers.Ensure("save", identifier, "-o", filepath.Join(data.Temp().Path(), "common.tar"))
 			helpers.Ensure("rmi", "-f", identifier)
 		},
 		Cleanup: func(data test.Data, helpers test.Helpers) {
-			helpers.Anyhow("rmi", "-f", data.Identifier())
+			helpers.Anyhow("rmi", "-f", identifier)
 		},
 		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
 			return helpers.Command("load", "--quiet", "--input", filepath.Join(data.Temp().Path(), "common.tar"))
@@ -106,7 +119,7 @@ func TestLoadQuiet(t *testing.T) {
 		Expected: func(data test.Data, helpers test.Helpers) *test.Expected {
 			return &test.Expected{
 				Output: expect.All(
-					expect.Contains(data.Identifier()),
+					expect.Contains(identifier),
 					expect.DoesNotContain("Loading layer"),
 				),
 			}
