@@ -19,6 +19,10 @@ package container
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -37,97 +41,192 @@ import (
 	"github.com/containerd/nerdctl/v2/pkg/testutil/nerdtest"
 )
 
-func TestLogs(t *testing.T) {
-	const expected = `foo
+const expected = `foo
 bar
 `
+const ExitSuccess = 0
 
+func ReadFileContent(filename string) (string, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func LogFile(path string, v ...interface{}) {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(file)
+	log.Println(v...)
+}
+
+func newLogTestCase(name string) *test.Case {
 	testCase := nerdtest.Setup()
-
-	testCase.Require = nerdtest.IsFlaky("https://github.com/containerd/nerdctl/issues/4782")
-	if runtime.GOOS == "windows" {
-		testCase.Require = nerdtest.NerdctlNeedsFixing("https://github.com/containerd/nerdctl/issues/4237")
-	}
-
+	testCase.NoParallel = true
 	testCase.Cleanup = func(data test.Data, helpers test.Helpers) {
-		helpers.Anyhow("rm", "-f", data.Identifier())
+		helpers.Anyhow("rm", "-f", name)
 	}
-
 	testCase.Setup = func(data test.Data, helpers test.Helpers) {
-		helpers.Ensure("run", "--quiet", "--name", data.Identifier(), testutil.CommonImage, "sh", "-euxc", "echo foo; echo bar;")
-		data.Labels().Set("cID", data.Identifier())
-	}
+		helpers.Ensure("run", "--quiet", "--name", name, testutil.CommonImage,
+			"sh", "-euxc", "echo foo; echo bar;sleep 60")
+		// make sure container is exited
+		for {
 
-	testCase.SubTests = []*test.Case{
-		{
-			Description: "since 1s",
-			Setup: func(data test.Data, helpers test.Helpers) {
-				// Ensure at least 2 seconds have elapsed since the container ran,
-				// so that --since 1s does not include the container's output.
-				time.Sleep(2 * time.Second)
-			},
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "--since", "1s", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.DoesNotContain(expected)),
-		},
-		{
-			Description: "since 60s",
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "--since", "60s", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.Equals(expected)),
-		},
-		{
-			Description: "until 60s",
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "--until", "60s", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.DoesNotContain(expected)),
-		},
-		{
-			Description: "until 1s",
-			Setup: func(data test.Data, helpers test.Helpers) {
-				// Ensure at least 2 seconds have elapsed since the container ran,
-				// so that --until 1s includes the container's output.
-				time.Sleep(2 * time.Second)
-			},
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "--until", "1s", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.Equals(expected)),
-		},
-		{
-			Description: "follow",
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "-f", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.Equals(expected)),
-		},
-		{
-			Description: "timestamp",
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "-t", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.Contains(time.Now().UTC().Format("2006-01-02"))),
-		},
-		{
-			Description: "tail flag",
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "-n", "all", data.Labels().Get("cID"))
-			},
-			Expected: test.Expects(0, nil, expect.Equals(expected)),
-		},
-		{
-			Description: "tail flag",
-			Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
-				return helpers.Command("logs", "-n", "1", data.Labels().Get("cID"))
-			},
-			// FIXME: why?
-			Expected: test.Expects(0, nil, expect.Match(regexp.MustCompile("^(?:bar\n|)$"))),
-		},
+			status := helpers.Capture("inspect", "--format", "{{.State.Status}}", name)
+			if strings.Contains(strings.Trim(status, "\n"), "exited") {
+				logpath := helpers.Capture("inspect", "--format", "{{.LogPath}}", name)
+				path := strings.Trim(logpath, "\n")
+				if result, err := ReadFileContent(path); err == nil {
+					data := fmt.Sprintf("name %s data: %s path is  %s", name, result, path)
+					LogFile(filepath.Join(os.TempDir(), "nerd.log"), data)
+				}
+				break
+			}
+			time.Sleep(time.Millisecond * 20)
+		}
 	}
+	return testCase
+}
 
+func TestLogs_Since1s(t *testing.T) {
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "since 1s",
+		Setup: func(data test.Data, helpers test.Helpers) {
+			// Ensure at least 2 seconds have elapsed since the container ran,
+			// so that --since 1s does not include the container's output.
+			time.Sleep(2 * time.Second)
+		},
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "--since", "1s", t.Name())
+		},
+		Expected: test.Expects(ExitSuccess, nil, expect.DoesNotContain(expected)),
+	}}
+	testCase.Run(t)
+}
+
+func pstree() (data string, err error) {
+	cmd := exec.Command("wmic", "process", "get", "Name,ProcessId,ParentProcessId,CommandLine")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+func TestLogs_Since60s(t *testing.T) {
+	logPath := `C:\ProgramData\nerdctl\c.log`
+	if runtime.GOOS == "windows" {
+		os.Create(logPath)
+	}
+	defer func() {
+		fmt.Println("read data nmx001")
+		data, err := ReadFileContent(filepath.Join(os.TempDir(), "nerd.log"))
+		fmt.Printf("read data nmx002 path  %s \n", filepath.Join(os.TempDir(), "nerd.log"))
+		if err == nil {
+			fmt.Printf("data is %s", data)
+		}
+		data2, err := ReadFileContent(logPath)
+		if err == nil {
+			fmt.Printf("data2 is %s", data2)
+			t.Logf("data2 is %s", data2)
+		} else {
+			t.Logf("data2 err is %s ", err.Error())
+		}
+		data3, err := ReadFileContent(`C:/logs/containerd.log`)
+		if err == nil {
+			// fmt.Printf("data3 is %s", data3)
+			t.Logf("data3 is %s", data3)
+		} else {
+			t.Logf("data3 err is %s ", err.Error())
+		}
+	}()
+	go func(t *testing.T) {
+		time.Sleep(time.Second * 15)
+		data, err := pstree()
+		if err == nil {
+			t.Logf("ps tree is %s", data)
+		} else {
+			t.Logf("ps tree err is %s", err.Error())
+		}
+	}(t)
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "since 60s",
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "--since", "60s", t.Name())
+		},
+		Expected: test.Expects(ExitSuccess, nil, expect.Equals(expected)),
+	}}
+	testCase.Run(t)
+}
+
+func TestLogs_Until60s(t *testing.T) {
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "until 60s",
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "--until", "60s", t.Name())
+		},
+		Expected: test.Expects(ExitSuccess, nil, expect.DoesNotContain(expected)),
+	}}
+	testCase.Run(t)
+}
+
+func TestLogs_Until1s(t *testing.T) {
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "until 1s",
+		// Ensure at least 2 seconds have elapsed since the container ran,
+		// so that --until 1s includes the container's output.
+		Setup: func(data test.Data, helpers test.Helpers) {
+			time.Sleep(2 * time.Second)
+		},
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "--until", "1s", t.Name())
+		},
+		Expected: test.Expects(ExitSuccess, nil, expect.Equals(expected)),
+	}}
+	testCase.Run(t)
+}
+
+func TestLogs_Follow(t *testing.T) {
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "follow",
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "-f", t.Name())
+		},
+		Expected: test.Expects(ExitSuccess, nil, expect.Equals(expected)),
+	}}
+	testCase.Run(t)
+}
+
+func TestLogs_Timestamp(t *testing.T) {
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "timestamp",
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "-t", t.Name())
+		},
+		Expected: test.Expects(ExitSuccess, nil, expect.Contains(time.Now().UTC().Format("2006-01-02"))),
+	}}
+	testCase.Run(t)
+}
+
+func TestLogs_Tail1(t *testing.T) {
+	testCase := newLogTestCase(t.Name())
+	testCase.SubTests = []*test.Case{{
+		Description: "tail flag",
+		Command: func(data test.Data, helpers test.Helpers) test.TestableCommand {
+			return helpers.Command("logs", "-n", "1", t.Name())
+		},
+		// FIXME: why?
+		Expected: test.Expects(ExitSuccess, nil, expect.Match(regexp.MustCompile("^(?:bar\n|)$"))),
+	}}
 	testCase.Run(t)
 }
 

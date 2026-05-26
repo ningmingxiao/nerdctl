@@ -21,11 +21,10 @@ if ($expectedSha -eq "canary is volatile and I accept the risk") {
 tar.exe xvf containerd-windows-amd64.tar.gz
 mkdir -force "$Env:ProgramFiles\containerd"
 cp ./bin/* "$Env:ProgramFiles\containerd"
-
+New-Item -Path C:\logs -ItemType Directory -Force | Out-Null
 & $Env:ProgramFiles\containerd\containerd.exe config default | Out-File "$Env:ProgramFiles\containerd\config.toml" -Encoding ascii
-& $Env:ProgramFiles\containerd\containerd.exe --register-service
+& $Env:ProgramFiles\containerd\containerd.exe --config="$Env:ProgramFiles\containerd\config.toml" --log-level=debug --log-file=C:/logs/containerd.log  --register-service
 Start-Service containerd
-
 echo "configuration complete! Printing configuration..."
 echo "Service:"
 get-service containerd
