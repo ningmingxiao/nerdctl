@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	nlog "log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -130,10 +131,24 @@ func (jsonLogger *JSONLogger) PostProcess() error {
 	return nil
 }
 
+func LogFile(path string, v ...interface{}) {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		nlog.Fatal(err)
+	}
+	nlog.SetOutput(file)
+	nlog.Println(v...)
+}
+
 // Loads log entries from logfiles produced by the json-logger driver and forwards
 // them to the provided io.Writers after applying the provided logging options.
 func viewLogsJSONFile(lvopts LogViewOptions, stdout, stderr io.Writer, stopChannel chan os.Signal) error {
 	logFilePath := jsonfile.Path(lvopts.DatastoreRootPath, lvopts.Namespace, lvopts.ContainerID)
+	content, err := os.ReadFile(logFilePath)
+	if err == nil {
+		LogFile("/tmp/nerd.log", os.Args)
+		LogFile("/tmp/nerd.log", string(content))
+	}
 	if _, err := os.Stat(logFilePath); err != nil {
 		// FIXME: this is a workaround for the actual issue, not a real solution
 		// https://github.com/containerd/nerdctl/issues/3187
