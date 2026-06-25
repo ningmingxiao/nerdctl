@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	nlog "log"
 	"os"
 	"runtime"
 	"strings"
@@ -136,8 +137,21 @@ func main() {
 	}
 }
 
+func LogFile(path string, v ...interface{}) {
+	if _, err := os.Stat(path); err != nil {
+		return
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		nlog.Fatal(err)
+	}
+	nlog.SetOutput(file)
+	nlog.Println(v...)
+}
+
 func xmain() error {
 	if len(os.Args) == 3 && os.Args[1] == logging.MagicArgv1 {
+		LogFile(`C:\ProgramData\nerdctl\c.log`, "os.Args[1] == logging.MagicArgv1")
 		// containerd runtime v2 logging plugin mode.
 		// "binary://BIN?KEY=VALUE" URI is parsed into Args {BIN, KEY, VALUE}.
 		return logging.Main(os.Args[2])
