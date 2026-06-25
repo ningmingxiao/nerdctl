@@ -428,14 +428,14 @@ func Create(ctx context.Context, client *containerd.Client, args []string, netMa
 	cOpts = append(cOpts, spec)
 
 	c, containerErr := client.NewContainer(ctx, id, cOpts...)
-	var netSetupErr error
+		var netSetupErr error
 	if containerErr == nil {
 		netSetupErr = netManager.SetupNetworking(ctx, id)
 		if netSetupErr != nil {
 			log.G(ctx).WithError(netSetupErr).Warnf("networking setup error has occurred")
 		}
 	}
-
+	
 	if containerErr != nil || netSetupErr != nil {
 		returnedError := containerErr
 		if netSetupErr != nil {
