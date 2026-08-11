@@ -31,8 +31,14 @@ import (
 )
 
 func TestIPFSAddrWithKubo(t *testing.T) {
-	testCase := nerdtest.Setup()
+	for i := 0; i < 20; i++ {
+		testIPFSAddrWithKubo(t)
+	}
+}
 
+func testIPFSAddrWithKubo(t *testing.T) {
+	testCase := nerdtest.Setup()
+	testCase.NoParallel = true
 	const mainImageCIDKey = "mainImagemainImageCIDKey"
 	const ipfsAddrKey = "ipfsAddrKey"
 

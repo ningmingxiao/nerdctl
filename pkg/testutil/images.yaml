@@ -35,8 +35,8 @@ golang:
   tag: "1.26.1-trixie"
 
 kubo:
-  ref: "ghcr.io/stargz-containers/ipfs/kubo"
-  tag: "v0.16.0-org"
+  ref: "ipfs/kubo"
+  tag: "v0.41.0"
 
 mariadb:
   ref: "ghcr.io/stargz-containers/mariadb"
