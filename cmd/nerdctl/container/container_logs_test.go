@@ -19,6 +19,7 @@ package container
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -329,6 +330,13 @@ func TestLogsAfterRestartingContainer(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("FIXME: test does not work on Windows yet. Restarting a container fails with: failed to create shim task: hcs::CreateComputeSystem <id>: The requested operation for attach namespace failed.: unknown")
 	}
+
+	defer func() {
+		content, err := os.ReadFile("/tmp/nerd.log")
+		if err == nil {
+			t.Log(string(content))
+		}
+	}()
 
 	testCase := nerdtest.Setup()
 
